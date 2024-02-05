@@ -17,7 +17,7 @@
 
 ### Waitable
 
-可等待调用结果，支持异步和同步方式。
+可等待调用结果。
 
 ### Color Log
 
@@ -69,18 +69,9 @@ Shell.RunCommand("python -V");
 等待结果：
 
 ```csharp
-// 异步方式
 async void Foo()
 {
     var result = await Shell.RunCommand("python -V");
-    Debug.Log(result.Output);   // output: 3.11.2
-    Debug.Log(result.ExitCode); // output: 0
-}
-
-// 同步方式
-void Bar()
-{
-    var result = Shell.RunCommand("python -V").Wait();
     Debug.Log(result.Output);   // output: 3.11.2
     Debug.Log(result.ExitCode); // output: 0
 }

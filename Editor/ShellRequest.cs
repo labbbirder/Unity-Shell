@@ -1,16 +1,18 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace com.bbbirder.unityeditor
 {
 
     public class ShellRequest : INotifyCompletion
     {
-        public event Action<LogType, string> onLog;
+        public event Action<LogEventType, string> onLog;
         public event Action<int> onComplete;
-        internal Process Process { get; set; }
-        internal ShellResult result;
+        Process process;
+        ShellResult result;
 
         bool _completed = false;
         public bool IsCompleted => _completed;
@@ -28,19 +30,20 @@ namespace com.bbbirder.unityeditor
             }
         }
         public ShellResult GetResult() => result;
-        internal ShellRequest(string command)
+        internal ShellRequest(string command, Process proc)
         {
+            process = proc;
             result = new(command);
         }
 
 
-        public void Log(LogType type, string log)
+        public void Log(LogEventType type, string log)
         {
-            if (type == LogType.Info)
+            if (type == LogEventType.InfoLog)
             {
                 result.outputBuilder.AppendLine(log);
             }
-            else if (type == LogType.Error)
+            else if (type == LogEventType.ErrorLog)
             {
                 result.errorBuilder.AppendLine(log);
             }
@@ -64,19 +67,12 @@ namespace com.bbbirder.unityeditor
                     foreach (var l in log.Split("\n"))
                         UnityEngine.Debug.Log("<color=#808080>[ Shell Output ]</color>" + l);
                 }
-                else if (type == LogType.Error)
+                else if (type == LogEventType.ErrorLog)
                 {
                     foreach (var l in log.Split("\n"))
                         UnityEngine.Debug.LogError("<color=#808080>[ Shell Output ]</color>" + l);
                 }
             }
-        }
-
-        public ShellResult Wait()
-        {
-            Process.WaitForExit();
-            NotifyComplete(Process.ExitCode);
-            return result;
         }
 
         internal void NotifyComplete(int ExitCode)
