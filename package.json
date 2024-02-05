@@ -1,0 +1,18 @@
+{
+  "name": "com.bbbirder.shell",
+  "displayName": "shell",
+  "description": "run shell in unity editor",
+  "version": "0.0.1",
+  "hideInEditor": false,
+  "scripts": {},
+  "author": "bbbirder <502100554@qq.com>",
+  "keywords": [
+    "shell",
+    "batch",
+    "bash",
+    "command",
+    "cmd",
+    "system",
+    "colorlog"
+  ]
+}
