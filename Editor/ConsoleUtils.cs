@@ -1,11 +1,26 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace com.bbbirder.unityeditor
 {
+    using static ConsoleUtils.ConsoleForeColor;
     public static class ConsoleUtils
     {
+        public enum ConsoleForeColor
+        {
+            Default = 0,
+            Black = 30,
+            Red = 31,
+            Green = 32,
+            Yellow = 33,
+            Blue = 34,
+            Magenta = 35,
+            Cyan = 36,
+            White = 37,
+        }
+        public delegate string ColorMarkVisitor(ConsoleForeColor foreColor);
         public const char PATH_SPLITTER =
 #if UNITY_EDITOR_WIN
             ';'
@@ -13,24 +28,30 @@ namespace com.bbbirder.unityeditor
 			':'
 #endif
             ;
-        static Dictionary<int, string> foreColor = new(){
-            {30, "#000000"}, //black
-			{31, "#FF0000"}, //red
-			{32, "#00FF00"}, //green
-			{33, "#FFFF00"}, //yellow
-			{34, "#0000FF"}, //blue
-			{35, "#FF00FF"}, //magenta
-			{36, "#00FFFF"}, //cyan
-			{37, "#FFFFFF"}, //white
-		};
+        internal static readonly char[] ANY_PATH_SPLITTER = new[]
+        {
+            ';',':'
+        };
 
         /// <summary>
         /// Parse standard color log to unity color log
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public static string NormalizeColor(string input)
+        public static string ConvertToUnityColor(string input)
+            => ScanColorLog(input, DefaultColorMarkVisitor);
+
+        /// <summary>
+        /// Remove color marks
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        public static string ConvertToNoColor(string input)
+            => ScanColorLog(input, RemoveColorsVisitor);
+
+        public static string ScanColorLog(string input, ColorMarkVisitor visitor)
         {
+
             var pattern = "\x1b" + @"\[(\d+;)?(\d+;)?(\d+)m";
             return Regex.Replace(input, pattern, m =>
             {
@@ -38,13 +59,28 @@ namespace com.bbbirder.unityeditor
                 {
                     if (int.TryParse(g.Value, out var c))
                     {
-                        if (c is 0 or 39) return "</color>";
-                        if (foreColor.TryGetValue(c, out var col)) return $"<color={col}>";
+                        return visitor(c is 0 or 39 ? Default : (ConsoleForeColor)c);
                     }
                 }
                 return m.Value;
             });
         }
+
+        public static string DefaultColorMarkVisitor(ConsoleForeColor foreColor) => foreColor switch
+        {
+            Black => "<color=#000000>",
+            Red => "<color=#FF0000>",
+            Green => "<color=#00FF00>",
+            Yellow => "<color=#FFFF00>",
+            Blue => "<color=#0000FF>",
+            Magenta => "<color=#FF00FF>",
+            Cyan => "<color=#00FFFF>",
+            White => "<color=#FFFFFF>",
+            Default => "</color>",
+            _ => ""
+        };
+
+        static string RemoveColorsVisitor(ConsoleForeColor foreColor) => "";
 
         /// <summary>
         /// When standard output encoding is not normalized, use this to guess the encoding on the fly.

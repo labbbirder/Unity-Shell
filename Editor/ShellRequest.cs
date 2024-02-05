@@ -58,8 +58,8 @@ namespace com.bbbirder.unityeditor
 						log = Encoding.UTF8.GetString(bytes);
 					}
 #endif
-                log = ConsoleUtils.NormalizeColor(log);
-                if (type == LogType.Info)
+                log = ConsoleUtils.ConvertToUnityColor(log);
+                if (type == LogEventType.InfoLog)
                 {
                     foreach (var l in log.Split("\n"))
                         UnityEngine.Debug.Log("<color=#808080>[ Shell Output ]</color>" + l);
