@@ -2,7 +2,7 @@
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/labbbirder/Unity-Shell)
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/labbbirder/Unity-Shell)
-[![openupm](https://img.shields.io/npm/v/com.bbbirder.unityshell?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.bbbirder.Unity-Shell/)
+[![openupm](https://img.shields.io/npm/v/com.bbbirder.shell?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.bbbirder.shell/)
 
 简单易用且功能丰富 Unity 命令行模块，用于 Editor 下调用命令行。
 
