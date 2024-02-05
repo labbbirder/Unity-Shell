@@ -1,4 +1,4 @@
-![Unity Shell](https://socialify.git.ci/labbbirder/unityshell/image?description=1&font=Jost&forks=1&issues=1&name=1&stargazers=1&theme=Auto)
+![Unity-Shell](https://socialify.git.ci/labbbirder/Unity-Shell/image?description=1&forks=1&issues=1&name=1&owner=1&stargazers=1&theme=Light)
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/labbbirder/unityshell)
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/labbbirder/unityshell)
