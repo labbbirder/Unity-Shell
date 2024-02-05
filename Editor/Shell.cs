@@ -24,6 +24,7 @@ namespace com.bbbirder.unityeditor
 		public static bool ThrowOnNonZeroExitCode = false;
 
 		private volatile static List<(ShellRequest, LogType, string)> _queue = new();
+		public static Dictionary<string, string> DefaultEnvironment = new();
 
 
 		static Shell()
@@ -73,6 +74,26 @@ namespace com.bbbirder.unityeditor
 			return isInPath;
 		}
 
+
+		static void ApplyEnviron(ProcessStartInfo start, Dictionary<string, string> environ)
+		{
+			if (environ == null) return;
+			foreach (var (name, val) in environ)
+			{
+				if (name.ToUpperInvariant().Equals("PATH"))
+				{
+					var pathes = Environment.GetEnvironmentVariable("PATH") ?? "";
+					var additional = val.Split(ConsoleUtils.ANY_PATH_SPLITTER);
+					pathes = string.Join(ConsoleUtils.PATH_SPLITTER, additional) + ConsoleUtils.PATH_SPLITTER + pathes;
+					start.EnvironmentVariables["PATH"] = pathes;
+				}
+				else
+				{
+					start.EnvironmentVariables[name] = val;
+				}
+			}
+		}
+
 		/// <summary>
 		/// Run a command
 		/// </summary>
@@ -95,26 +116,8 @@ namespace com.bbbirder.unityeditor
 						"bash";
 #endif
 					ProcessStartInfo start = new ProcessStartInfo(shellApp);
-
-					if (environmentVars != null)
-					{
-						foreach (var (name, var) in environmentVars)
-						{
-							if (name.ToUpperInvariant().Equals("PATH"))
-							{
-								var pathes = Environment.GetEnvironmentVariable("PATH") ?? "";
-								foreach (var path in var.Split(ConsoleUtils.PATH_SPLITTER))
-								{
-									pathes += ConsoleUtils.PATH_SPLITTER + path;
-								}
-								start.EnvironmentVariables["PATH"] = pathes;
-							}
-							else
-							{
-								start.EnvironmentVariables[name] += var;
-							}
-						}
-					}
+			ApplyEnviron(start, DefaultEnvironment);
+			ApplyEnviron(start, environ);
 #if UNITY_EDITOR_WIN
 #if DETECT_STDOUT_ENCODING
 					start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
