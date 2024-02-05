@@ -2,7 +2,7 @@
   "name": "com.bbbirder.shell",
   "displayName": "shell",
   "description": "run shell in unity editor",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "hideInEditor": false,
   "scripts": {},
   "author": "bbbirder <502100554@qq.com>",

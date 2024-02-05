@@ -6,14 +6,16 @@ using System.Collections.Generic;
 using System.IO;
 using System;
 using System.Text;
+using System.Threading;
 
 namespace com.bbbirder.unityeditor
 {
-	public enum LogType
+	public enum LogEventType
 	{
-		Info,
-		Warn,
-		Error,
+		InfoLog,
+		WarnLog,
+		ErrorLog,
+		EndStream,
 	}
 
 	public static class Shell
@@ -22,9 +24,8 @@ namespace com.bbbirder.unityeditor
 		/// Whether to throw when a shell returns non-zero exit code.
 		/// </summary>
 		public static bool ThrowOnNonZeroExitCode = false;
-
-		private volatile static List<(ShellRequest, LogType, string)> _queue = new();
 		public static Dictionary<string, string> DefaultEnvironment = new();
+		private volatile static List<(ShellRequest req, LogEventType type, object arg)> _queue = new();
 
 
 		static Shell()
@@ -33,7 +34,7 @@ namespace com.bbbirder.unityeditor
 			EditorApplication.update += DumpQueue;
 		}
 
-		private static void DumpQueue()
+		internal static void DumpQueue()
 		{
 			lock (_queue)
 			{
@@ -41,8 +42,15 @@ namespace com.bbbirder.unityeditor
 				{
 					try
 					{
-						var (req, type, log) = _queue[i];
-						req?.Log(type, log);
+						var (req, type, arg) = _queue[i];
+						if (type == LogEventType.EndStream)
+						{
+							req.NotifyComplete((int)arg);
+						}
+						else
+						{
+							req.Log(type, (string)arg);
+						}
 					}
 					catch (Exception e)
 					{
@@ -101,65 +109,63 @@ namespace com.bbbirder.unityeditor
 		/// <param name="workDirectory"></param>
 		/// <param name="environmentVars"></param>
 		/// <returns></returns>
-		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environmentVars = null)
+		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null)
 		{
-			ShellRequest req = new ShellRequest(cmd);
-			System.Threading.ThreadPool.QueueUserWorkItem(delegate (object state)
-			{
-				Process p = null;
-				try
-				{
-					var shellApp =
+			Process p = null;
+			var shellApp =
 #if UNITY_EDITOR_WIN
-						"cmd.exe";
+				"cmd.exe";
 #elif UNITY_EDITOR_OSX
-						"bash";
+				"bash";
 #endif
-					ProcessStartInfo start = new ProcessStartInfo(shellApp);
+			ProcessStartInfo start = new ProcessStartInfo(shellApp);
 			ApplyEnviron(start, DefaultEnvironment);
 			ApplyEnviron(start, environ);
 #if UNITY_EDITOR_WIN
 #if DETECT_STDOUT_ENCODING
-					start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
+			start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
 #else
-					start.Arguments = "/c \"" + cmd + " \"";
+			start.Arguments = "/c \"" + cmd + " \"";
 #endif
 #else
-					start.Arguments += "-c \"" + cmd + " \"";
+			start.Arguments += "-c \"" + cmd + " \"";
 #endif
-					start.CreateNoWindow = true;
-					start.ErrorDialog = true;
-					start.UseShellExecute = false;
-					start.WorkingDirectory = workDirectory;
+			start.CreateNoWindow = true;
+			start.ErrorDialog = true;
+			start.UseShellExecute = false;
+			start.WorkingDirectory = workDirectory;
 
-					if (start.UseShellExecute)
-					{
-						start.RedirectStandardOutput =
-						start.RedirectStandardError =
-						start.RedirectStandardInput = false;
-					}
-					else
-					{
-						start.RedirectStandardOutput =
-						start.RedirectStandardError =
-						start.RedirectStandardInput = true;
+			if (start.UseShellExecute)
+			{
+				start.RedirectStandardOutput =
+				start.RedirectStandardError =
+				start.RedirectStandardInput = false;
+			}
+			else
+			{
+				start.RedirectStandardOutput =
+				start.RedirectStandardError =
+				start.RedirectStandardInput = true;
 
-						start.StandardInputEncoding =
-						start.StandardOutputEncoding =
-						start.StandardErrorEncoding =
+				start.StandardInputEncoding =
+				start.StandardOutputEncoding =
+				start.StandardErrorEncoding =
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-							Encoding.Unicode;
+					Encoding.Unicode;
 #else
-							Encoding.UTF8;
+					Encoding.UTF8;
 #endif
-					}
+			}
 
-					p = Process.Start(start);
-					req.Process = p;
+			p = Process.Start(start);
+			ShellRequest req = new ShellRequest(cmd, p);
 
+			ThreadPool.QueueUserWorkItem(delegate (object state)
+			{
+				try
+				{
 					do
 					{
-						if (p.HasExited) break;
 
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
 						string line = p.StandardOutput.ReadLine(); //TODO: Split line from unicode stream
@@ -171,16 +177,14 @@ namespace com.bbbirder.unityeditor
 						{
 							lock (_queue)
 							{
-								_queue.Add((req, LogType.Info, line));
+								_queue.Add((req, LogEventType.InfoLog, line));
 							}
 						}
 
-					} while (true);
+					} while (!p.StandardOutput.EndOfStream);
 
 					do
 					{
-
-						if (p.HasExited) break;
 						string error = p.StandardError.ReadLine();
 
 						if (!string.IsNullOrEmpty(error))
@@ -188,12 +192,16 @@ namespace com.bbbirder.unityeditor
 							lock (_queue)
 							{
 								if (!string.IsNullOrEmpty(error))
-									_queue.Add((req, LogType.Error, error));
+									_queue.Add((req, LogEventType.ErrorLog, error));
 							}
 						}
-					} while (true);
+					} while (!p.StandardError.EndOfStream);
 
-					req.NotifyComplete(p.ExitCode);
+					lock (_queue)
+					{
+						_queue.Add((req, LogEventType.EndStream, p.ExitCode));
+					}
+
 					p.Close();
 					p = null;
 				}
