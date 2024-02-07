@@ -46,7 +46,7 @@ Windows下，支持特殊字符、中文、英文等，不再受乱码困扰。
 
 ## Install
 
-Add git url `https://github.com/labbbirder/com.bbbirder.shell.git` to package manager
+Add git url `https://github.com/labbbirder/Unity-Shell.git` to package manager
 
 or
 
