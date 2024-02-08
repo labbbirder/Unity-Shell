@@ -61,7 +61,15 @@ Run a shell:
 ```csharp
 using com.bbbirder.unityeditor;
 
+// single line
 Shell.RunCommand("python -V");
+
+// multiple line
+Shell.RunCommand(@"
+    echo start
+    ping baidu.com -n 6
+    echo end
+");
 ```
 
 等待结果：

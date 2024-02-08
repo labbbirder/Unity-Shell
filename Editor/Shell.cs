@@ -99,38 +99,16 @@ namespace com.bbbirder.unityeditor
 			}
 		}
 
-		/// <summary>
-		/// Run a command
-		/// </summary>
-		/// <param name="cmd"></param>
-		/// <param name="workDirectory"></param>
-		/// <param name="environmentVars"></param>
-		/// <returns></returns>
-		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, bool quiet = false)
+
+		static Process CreateProcess(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, params string[] args)
 		{
-			Process p = null;
-			var shellApp =
-#if UNITY_EDITOR_WIN
-				"cmd.exe";
-#elif UNITY_EDITOR_OSX
-				"bash";
-#endif
-			ProcessStartInfo start = new ProcessStartInfo(shellApp);
-			ApplyEnviron(start, DefaultEnvironment);
-			ApplyEnviron(start, environ);
-#if UNITY_EDITOR_WIN
-#if DETECT_STDOUT_ENCODING
-			start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
-#else
-			start.Arguments = "/c \"" + cmd + " \"";
-#endif
-#else
-			start.Arguments += "-c \"" + cmd + " \"";
-#endif
-			start.CreateNoWindow = true;
-			start.ErrorDialog = true;
-			start.UseShellExecute = false;
-			start.WorkingDirectory = workDirectory;
+			ProcessStartInfo start = new ProcessStartInfo(cmd)
+			{
+				CreateNoWindow = true,
+				ErrorDialog = true,
+				UseShellExecute = false,
+				WorkingDirectory = workDirectory,
+			};
 
 			if (start.UseShellExecute)
 			{
@@ -154,7 +132,62 @@ namespace com.bbbirder.unityeditor
 #endif
 			}
 
-			p = Process.Start(start);
+			start.ArgumentList.Clear();
+			foreach (var arg in args)
+			{
+				start.ArgumentList.Add(arg);
+			}
+
+			ApplyEnviron(start, DefaultEnvironment);
+			ApplyEnviron(start, environ);
+
+			return Process.Start(start);
+		}
+
+
+		/// <summary>
+		/// Run a command
+		/// </summary>
+		/// <param name="cmd"></param>
+		/// <param name="workDirectory"></param>
+		/// <param name="environmentVars"></param>
+		/// <returns></returns>
+		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, bool quiet = false)
+		{
+			cmd = "@echo off>nul\n" +
+#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
+				"@chcp 65001>nul\n"
+#endif
+				cmd;
+			Process p = null;
+			var tempFile = Path.GetTempFileName();
+			var cmdFile = tempFile +
+#if UNITY_EDITOR_WIN
+				".bat";
+#else
+				".sh";
+#endif
+			if (File.Exists(cmdFile))
+			{
+				File.Delete(cmdFile);
+			}
+			File.Move(tempFile, cmdFile);
+			File.WriteAllText(cmdFile, cmd);
+#if UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
+			var pChmod = CreateProcess("chmod", ".", "+x", cmdFile);
+			pChmod.WaitForExit();
+#endif
+			// #if UNITY_EDITOR_WIN
+			// #if DETECT_STDOUT_ENCODING
+			// 			start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
+			// #else
+			// 			start.Arguments = "/c \"" + cmd + " \"";
+			// #endif
+			// #else
+			// 			start.Arguments += "-c \"" + cmd + " \"";
+			// #endif
+
+			p = CreateProcess(cmdFile, workDirectory, environ);
 			ShellRequest req = new ShellRequest(cmd, p, quiet);
 
 			ThreadPool.QueueUserWorkItem(delegate (object state)
