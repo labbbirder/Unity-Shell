@@ -39,14 +39,7 @@ namespace com.bbbirder.unityeditor
 
         public void Log(LogEventType type, string log)
         {
-            if (type == LogEventType.InfoLog)
-            {
-                result.outputBuilder.AppendLine(log);
-            }
-            else if (type == LogEventType.ErrorLog)
-            {
-                result.errorBuilder.AppendLine(log);
-            }
+            result.AppendLine(type, log);
 
             if (onLog != null)
             {
