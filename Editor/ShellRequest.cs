@@ -11,11 +11,19 @@ namespace com.bbbirder.unityeditor
     {
         public event Action<LogEventType, string> onLog;
         public event Action<int> onComplete;
-        Process process;
+        bool isQuiet;
+        // Process process;
         ShellResult result;
 
         bool _completed = false;
         public bool IsCompleted => _completed;
+        internal ShellRequest(string command, Process proc, bool quiet)
+        {
+            // process = proc;
+            _completed = false;
+            result = new(command);
+            isQuiet = quiet;
+        }
         public void OnCompleted(Action continuation)
         {
             if (_completed)
@@ -41,19 +49,19 @@ namespace com.bbbirder.unityeditor
         {
             result.AppendLine(type, log);
 
-            if (onLog != null)
-            {
-                onLog(type, log);
-            }
-            else
-            {
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-					var bytes = Encoding.Unicode.GetBytes(log);
-					if (ConsoleUtils.IsUTF8InsteadOf16(bytes))
-					{
-						log = Encoding.UTF8.GetString(bytes);
-					}
+            var bytes = Encoding.Unicode.GetBytes(log);
+            if (ConsoleUtils.IsUTF8InsteadOf16(bytes))
+            {
+                log = Encoding.UTF8.GetString(bytes);
+            }
 #endif
+
+            onLog?.Invoke(type, log);
+
+            if (!isQuiet)
+            {
+
                 log = ConsoleUtils.ConvertToUnityColor(log);
                 if (type == LogEventType.InfoLog)
                 {

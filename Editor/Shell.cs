@@ -158,7 +158,7 @@ namespace com.bbbirder.unityeditor
 			}
 
 			p = Process.Start(start);
-			ShellRequest req = new ShellRequest(cmd, p);
+			ShellRequest req = new ShellRequest(cmd, p, quiet);
 
 			ThreadPool.QueueUserWorkItem(delegate (object state)
 			{
