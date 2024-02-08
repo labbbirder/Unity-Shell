@@ -87,7 +87,7 @@ void Bar()
 IEnumerator Baz()
 {
     var request = Shell.RunCommand("python -V");
-    yield return request;
+    yield return request.ToCoroutine();
     var result = request.result;
     Debug.Log(result.Output);   // output: 3.11.2
     Debug.Log(result.ExitCode); // output: 0
