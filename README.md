@@ -6,7 +6,6 @@
 
 简单易用且功能丰富 Unity 命令行模块，用于 Editor 下调用命令行。
 
-
 ## Features List
 
 重定向标准输出流到 Unity 控制台，支持众多特性。
@@ -17,7 +16,7 @@
 
 ### Waitable
 
-可等待调用结果。
+可等待调用结果。支持同步方式和异步方式。
 
 ### Color Log
 
@@ -27,14 +26,14 @@
 
 ### Encoding
 
-Windows下，支持特殊字符、中文、英文等，不再受乱码困扰。
+Windows 下，支持特殊字符、中文、英文等，不再受乱码困扰。
 
 ![unicode](./Documentation/unicode.png)
 
 > 需要在 PlayerSetting 中指定宏：DETECT_STDOUT_ENCODING（不推荐），则会实时猜测输出流编码。或修改系统设置（推荐）。如下图：
 >
 > ![windows](./Documentation/config_sys.png)
-> 
+>
 > 使用编码猜测的方式并不完全可靠，可能遇到奇怪的问题，因此默认关闭。
 
 ### Immediate Log One By One
@@ -42,7 +41,6 @@ Windows下，支持特殊字符、中文、英文等，不再受乱码困扰。
 多步打印实时转发，可视化执行过程
 
 ![one-by-one](./Documentation/one-by-one.png)
-
 
 ## Install
 
@@ -69,9 +67,28 @@ Shell.RunCommand("python -V");
 等待结果：
 
 ```csharp
+// 异步方式
 async void Foo()
 {
     var result = await Shell.RunCommand("python -V");
+    Debug.Log(result.Output);   // output: 3.11.2
+    Debug.Log(result.ExitCode); // output: 0
+}
+
+// 同步方式
+void Bar()
+{
+    var result = Shell.RunCommand("python -V").Wait();
+    Debug.Log(result.Output);   // output: 3.11.2
+    Debug.Log(result.ExitCode); // output: 0
+}
+
+// 协程方式
+IEnumerator Baz()
+{
+    var request = Shell.RunCommand("python -V");
+    yield return request;
+    var result = request.result;
     Debug.Log(result.Output);   // output: 3.11.2
     Debug.Log(result.ExitCode); // output: 0
 }
@@ -107,8 +124,8 @@ await Shell.ExistsCommand("ls Non-Exist-Path"); // throws
 
 ```
 
-## Unity控制台设置
+## Unity 控制台设置
 
-如果需要美化打印，可设置UnityConsole如下：
+如果需要美化打印，可设置 UnityConsole 如下：
 
 ![unity](./Documentation/config_unity.png)
