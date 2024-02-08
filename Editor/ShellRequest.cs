@@ -39,6 +39,17 @@ namespace com.bbbirder.unityeditor
             }
         }
 
+
+        public IEnumerator ToCoroutine()
+        {
+            while (!IsCompleted)
+            {
+                Shell.DumpQueue();
+                yield return null;
+            }
+        }
+
+
         public ShellResult Wait()
         {
             while (!IsCompleted)
