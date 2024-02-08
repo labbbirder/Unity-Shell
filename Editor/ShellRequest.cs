@@ -15,8 +15,9 @@ namespace com.bbbirder.unityeditor
         // Process process;
         ShellResult result;
 
-        bool _completed = false;
+        bool _completed;
         public bool IsCompleted => _completed;
+        public ShellResult GetResult() => result;
         internal ShellRequest(string command, Process proc, bool quiet)
         {
             // process = proc;
@@ -24,26 +25,29 @@ namespace com.bbbirder.unityeditor
             result = new(command);
             isQuiet = quiet;
         }
+
+
         public void OnCompleted(Action continuation)
         {
-            if (_completed)
+            if (IsCompleted)
             {
                 continuation?.Invoke();
             }
             else
             {
-
-                _completed = true;
                 onComplete += _ => continuation?.Invoke();
             }
         }
-        public ShellResult GetResult() => result;
-        internal ShellRequest(string command, Process proc)
-        {
-            process = proc;
-            result = new(command);
-        }
 
+        public ShellResult Wait()
+        {
+            while (!IsCompleted)
+            {
+                Shell.DumpQueue();
+                Task.Delay(10).Wait();
+            }
+            return result;
+        }
 
         public void Log(LogEventType type, string log)
         {
@@ -76,6 +80,7 @@ namespace com.bbbirder.unityeditor
             }
         }
 
+
         internal void NotifyComplete(int ExitCode)
         {
             result.NotifyComplete(ExitCode);
@@ -85,6 +90,7 @@ namespace com.bbbirder.unityeditor
             }
             onComplete?.Invoke(ExitCode);
             onComplete = null;
+            _completed = true;
         }
 
         public ShellRequest GetAwaiter() => this;

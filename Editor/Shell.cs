@@ -7,6 +7,7 @@ using System.IO;
 using System;
 using System.Text;
 using System.Threading;
+using System.Collections.Concurrent;
 
 namespace com.bbbirder.unityeditor
 {
@@ -25,7 +26,7 @@ namespace com.bbbirder.unityeditor
 		/// </summary>
 		public static bool ThrowOnNonZeroExitCode = false;
 		public static Dictionary<string, string> DefaultEnvironment = new();
-		private volatile static List<(ShellRequest req, LogEventType type, object arg)> _queue = new();
+		private static ConcurrentQueue<(ShellRequest req, LogEventType type, object arg)> _queue = new();
 
 
 		static Shell()
@@ -36,28 +37,24 @@ namespace com.bbbirder.unityeditor
 
 		internal static void DumpQueue()
 		{
-			lock (_queue)
+			while (_queue.TryDequeue(out var res))
 			{
-				for (int i = 0; i < _queue.Count; i++)
+				try
 				{
-					try
+					var (req, type, arg) = res;
+					if (type == LogEventType.EndStream)
 					{
-						var (req, type, arg) = _queue[i];
-						if (type == LogEventType.EndStream)
-						{
-							req.NotifyComplete((int)arg);
-						}
-						else
-						{
-							req.Log(type, (string)arg);
-						}
+						req.NotifyComplete((int)arg);
 					}
-					catch (Exception e)
+					else
 					{
-						UnityEngine.Debug.LogException(e);
+						req.Log(type, (string)arg);
 					}
 				}
-				_queue.Clear();
+				catch (Exception e)
+				{
+					UnityEngine.Debug.LogException(e);
+				}
 			}
 		}
 
@@ -109,7 +106,7 @@ namespace com.bbbirder.unityeditor
 		/// <param name="workDirectory"></param>
 		/// <param name="environmentVars"></param>
 		/// <returns></returns>
-		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null)
+		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, bool quiet = false)
 		{
 			Process p = null;
 			var shellApp =
@@ -175,10 +172,7 @@ namespace com.bbbirder.unityeditor
 
 						if (line != null)
 						{
-							lock (_queue)
-							{
-								_queue.Add((req, LogEventType.InfoLog, line));
-							}
+							_queue.Enqueue((req, LogEventType.InfoLog, line));
 						}
 
 					} while (!p.StandardOutput.EndOfStream);
@@ -192,14 +186,14 @@ namespace com.bbbirder.unityeditor
 							lock (_queue)
 							{
 								if (!string.IsNullOrEmpty(error))
-									_queue.Add((req, LogEventType.ErrorLog, error));
+									_queue.Enqueue((req, LogEventType.ErrorLog, error));
 							}
 						}
 					} while (!p.StandardError.EndOfStream);
 
 					lock (_queue)
 					{
-						_queue.Add((req, LogEventType.EndStream, p.ExitCode));
+						_queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
 					}
 
 					p.Close();
