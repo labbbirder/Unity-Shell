@@ -17,7 +17,7 @@ namespace com.bbbirder.unityeditor
         internal ShellResult(string cmd)
         {
             Command = cmd;
-            outputBuilder =
+            outputBuilder = new();
             errorBuilder = new();
             m_Output =
             m_Error = null;
