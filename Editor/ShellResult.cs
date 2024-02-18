@@ -26,6 +26,10 @@ namespace com.bbbirder.unityeditor
         internal void NotifyComplete(int exitCode)
         {
             ExitCode = exitCode;
+            if (!string.IsNullOrEmpty(Error))
+            {
+                UnityEngine.Debug.LogError($"cmd: {Command} error:\n{Error}");
+            }
         }
         internal void AppendLine(LogEventType type, string line)
         {

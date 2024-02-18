@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -39,7 +40,6 @@ namespace com.bbbirder.unityeditor
             }
         }
 
-
         public IEnumerator ToCoroutine()
         {
             while (!IsCompleted)
@@ -48,7 +48,6 @@ namespace com.bbbirder.unityeditor
                 yield return null;
             }
         }
-
 
         public ShellResult Wait()
         {
@@ -87,6 +86,13 @@ namespace com.bbbirder.unityeditor
                 {
                     foreach (var l in log.Split("\n"))
                         UnityEngine.Debug.LogError("<color=#808080>[ Shell Output ]</color>" + l);
+                }
+                else if (type == LogEventType.EndStream)
+                {
+                    if (result.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogError("<color=#808080>[ Shell Output ]</color>" + $"{result.Command} exit with code {result.ExitCode}");
+                    }
                 }
             }
         }
