@@ -216,18 +216,12 @@ namespace com.bbbirder.unityeditor
 
 						if (!string.IsNullOrEmpty(error))
 						{
-							lock (_queue)
-							{
-								if (!string.IsNullOrEmpty(error))
-									_queue.Enqueue((req, LogEventType.ErrorLog, error));
-							}
+							if (!string.IsNullOrEmpty(error))
+								_queue.Enqueue((req, LogEventType.ErrorLog, error));
 						}
 					} while (!p.StandardError.EndOfStream);
 
-					lock (_queue)
-					{
-						_queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
-					}
+					_queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
 
 					p.Close();
 					p = null;
