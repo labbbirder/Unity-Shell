@@ -49,6 +49,7 @@ Windows 下，支持特殊字符、中文、英文等，不再受乱码困扰。
 点击关闭发送关闭消息；点击暂停发送用户输入。
 
 ![background](./Documentation/background.png)
+
 ![input](./Documentation/input.png)
 
 ## Install
