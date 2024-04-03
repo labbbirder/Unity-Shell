@@ -16,6 +16,8 @@ namespace com.bbbirder.unityeditor
         bool isThrowOnNonZeroExitCode;
         // Process process;
         ShellResult result;
+        bool m_IsCompleted;
+        public bool IsCompleted => m_IsCompleted;
         public ShellResult GetResult() => result;
         internal ShellRequest(string command, Process proc, bool quiet, bool throwOnNonZeroExitCode)
         {
@@ -23,8 +25,9 @@ namespace com.bbbirder.unityeditor
             m_IsCompleted = false;
             result = new(command);
             isQuiet = quiet;
-        }
+            isThrowOnNonZeroExitCode = throwOnNonZeroExitCode;
 
+        }
 
         public void OnCompleted(Action continuation)
         {

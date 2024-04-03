@@ -45,11 +45,47 @@ namespace com.bbbirder.unityeditor
 					var (req, type, arg) = res;
 					if (type == LogEventType.EndStream)
 					{
+						if (!lineBuilders.TryGetValue(req, out var builder))
+						{
+							lineBuilders[req] = builder = new();
+						}
+						if (builder.Length > 0)
+						{
+							req.Log(LogEventType.InfoLog, builder.ToString());
+						}
+						builder.Clear();
 						req.NotifyComplete((int)arg);
 					}
 					else
 					{
-						req.Log(type, (string)arg);
+						if (type == LogEventType.InfoLog)
+						{
+							if (!lineBuilders.TryGetValue(req, out var builder))
+							{
+								lineBuilders[req] = builder = new();
+							}
+							var buf = (arg as string).AsSpan();
+							var nIdx = ~0;
+							var pendingOutput = "";
+							while ((nIdx = buf.IndexOf('\n')) != ~0)
+							{
+								builder.Append(buf.Slice(0, nIdx));
+								buf = buf.Slice(nIdx + 1);
+								pendingOutput = builder.ToString();
+								req.Log(type, pendingOutput);
+								builder.Clear();
+							}
+							builder.Append(buf);
+							if (builder.Length > 0)
+							{
+								pendingOutput = builder.ToString();
+							}
+							req.PendingOutput = pendingOutput;
+						}
+						else
+						{
+							req.Log(type, (string)arg);
+						}
 					}
 				}
 				catch (Exception e)
@@ -111,27 +147,18 @@ namespace com.bbbirder.unityeditor
 				WorkingDirectory = workDirectory,
 			};
 
-			if (start.UseShellExecute)
-			{
-				start.RedirectStandardOutput =
-				start.RedirectStandardError =
-				start.RedirectStandardInput = false;
-			}
-			else
-			{
-				start.RedirectStandardOutput =
-				start.RedirectStandardError =
-				start.RedirectStandardInput = true;
+			start.RedirectStandardOutput =
+			start.RedirectStandardError =
+			start.RedirectStandardInput = true;
 
-				start.StandardInputEncoding =
-				start.StandardOutputEncoding =
-				start.StandardErrorEncoding =
-#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-					Encoding.Unicode;
-#else
-					Encoding.UTF8;
-#endif
-			}
+			// 			start.StandardInputEncoding =
+			// 			start.StandardOutputEncoding =
+			// 			start.StandardErrorEncoding =
+			// #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
+			// 				Encoding.Unicode;
+			// #else
+			// 				Encoding.UTF8;
+			// #endif
 
 			start.ArgumentList.Clear();
 			foreach (var arg in args)
@@ -141,8 +168,12 @@ namespace com.bbbirder.unityeditor
 
 			ApplyEnviron(start, DefaultEnvironment);
 			ApplyEnviron(start, environ);
-
-			return Process.Start(start);
+			var process = new Process()
+			{
+				StartInfo = start,
+			};
+			process.Start();
+			return process;
 		}
 
 
@@ -163,7 +194,7 @@ namespace com.bbbirder.unityeditor
 				"@chcp 65001>nul\n"
 #endif
 				cmd;
-			Process p = null;
+
 			var tempFile = Path.GetTempFileName();
 			var cmdFile = tempFile +
 #if UNITY_EDITOR_WIN
@@ -176,63 +207,70 @@ namespace com.bbbirder.unityeditor
 				File.Delete(cmdFile);
 			}
 			File.Move(tempFile, cmdFile);
-			File.WriteAllText(cmdFile, cmd);
+			File.WriteAllText(cmdFile, finalCmd);
 #if UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
 			var pChmod = CreateProcess("chmod", ".", "+x", cmdFile);
 			pChmod.WaitForExit();
 #endif
-			// #if UNITY_EDITOR_WIN
-			// #if DETECT_STDOUT_ENCODING
-			// 			start.Arguments = "/u /c \"chcp 65001>nul&" + cmd + " \"";
-			// #else
-			// 			start.Arguments = "/c \"" + cmd + " \"";
-			// #endif
-			// #else
-			// 			start.Arguments += "-c \"" + cmd + " \"";
-			// #endif
 
-			p = CreateProcess(cmdFile, workDirectory, environ);
-			ShellRequest req = new ShellRequest(cmd, p, quiet);
+			var p = CreateProcess(cmdFile, workDirectory, environ);
+			return QueueUpProcess(p, cmd, quiet, settings.throwOnNonZeroExitCode);
+		}
+
+
+		public static ShellRequest RunCommand(string executable, ShellSettings settings = default, params string[] args)
+		{
+			var workDirectory = settings.workDirectory ?? ".";
+			var environ = settings.environment ?? new();
+			var quiet = settings.quiet;
+
+			var p = CreateProcess(executable, workDirectory, environ, args);
+			return QueueUpProcess(p, executable + ' ' + String.Join(' ', args), quiet, settings.throwOnNonZeroExitCode);
+		}
+
+
+		static ShellRequest QueueUpProcess(Process p, string cmd, bool quiet, bool throwOnNonZeroExitCode)
+		{
+
+			ShellRequest req = new ShellRequest(cmd, p, quiet, throwOnNonZeroExitCode);
 
 			ThreadPool.QueueUserWorkItem(delegate (object state)
 			{
 				try
 				{
-					do
+					var builder = new StringBuilder();
+
+					while (!p.StandardOutput.EndOfStream)
 					{
-
-#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-						string line = p.StandardOutput.ReadLine(); //TODO: Split line from unicode stream
-#else
-						string line = p.StandardOutput.ReadLine();
-#endif
-
-						if (line != null)
+						while (p.StandardOutput.Peek() > -1)
 						{
-							_queue.Enqueue((req, LogEventType.InfoLog, line));
+							builder.Append((char)p.StandardOutput.Read());
 						}
+						var output = builder.ToString();
+						builder.Clear();
+						queue.Enqueue((req, LogEventType.InfoLog, output));
+					}
 
-					} while (!p.StandardOutput.EndOfStream);
-
-					do
+					while (!p.StandardError.EndOfStream)
 					{
 						string error = p.StandardError.ReadLine();
 
 						if (!string.IsNullOrEmpty(error))
 						{
 							if (!string.IsNullOrEmpty(error))
-								_queue.Enqueue((req, LogEventType.ErrorLog, error));
+								queue.Enqueue((req, LogEventType.ErrorLog, error));
 						}
-					} while (!p.StandardError.EndOfStream);
+					}
 
-					_queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
+					queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
 
-					p.Close();
-					p = null;
 				}
 				catch (Exception e)
 				{
 					UnityEngine.Debug.LogException(new("shell execute fail", e));
+				}
+				finally
+				{
 					if (p != null)
 					{
 						p.Close();
