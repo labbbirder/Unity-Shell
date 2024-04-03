@@ -42,6 +42,15 @@ Windows 下，支持特殊字符、中文、英文等，不再受乱码困扰。
 
 ![one-by-one](./Documentation/one-by-one.png)
 
+### Backgound Task View
+
+右下角后台任务可以预览和管理正在运行的command
+
+点击关闭发送关闭消息；点击暂停发送用户输入。
+
+![background](./Documentation/background.png)
+![input](./Documentation/input.png)
+
 ## Install
 
 Add git url `https://github.com/labbbirder/Unity-Shell.git` to package manager
@@ -70,6 +79,9 @@ Shell.RunCommand(@"
     ping baidu.com -n 6
     echo end
 ");
+
+// separate arguments
+Shell.RunCommand("ping",new(),"baidu.com","-n","20");
 ```
 
 等待结果：
@@ -106,30 +118,6 @@ IEnumerator Baz()
 
 ```csharp
 var hasTsNodeCli = Shell.ExistsCommand("ts-node");
-```
-
-设置环境变量，如果是`PATH`则为追加赋值:
-
-```csharp
-var hasTsNodeCli = Shell.ExistsCommand(
-    "game-server",
-    "path-to-server-dir",
-    new Dictionary()
-    {
-        {"PATH", "D:/bin;"},       // env PATH += additional pathes
-        {"RUNTIME_MODE", "DEBUG"}, // env RUNTIME_MODE := DEBUG
-        {"PORT", "35311"},         // env PORT := 35311
-    }
-);
-```
-
-设置默认报错行为。如果命令行异常退出，默认不会报错。如果要改变默认行为：
-
-```csharp
-await Shell.ExistsCommand("ls Non-Exist-Path"); // error output only
-Shell.ThrowOnNonZeroExitCode = true;
-await Shell.ExistsCommand("ls Non-Exist-Path"); // throws
-
 ```
 
 ## Unity 控制台设置
