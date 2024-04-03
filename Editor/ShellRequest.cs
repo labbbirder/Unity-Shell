@@ -2,8 +2,8 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
+using UnityEditor;
 
 namespace com.bbbirder.unityeditor
 {
@@ -16,6 +16,22 @@ namespace com.bbbirder.unityeditor
         bool isThrowOnNonZeroExitCode;
         // Process process;
         ShellResult result;
+        string m_pendingOutput;
+        internal string PendingOutput
+        {
+            get
+            {
+                return m_pendingOutput;
+            }
+            set
+            {
+                if (ReferenceEquals(m_pendingOutput, value)) return;
+                pseudoProgress += (1 - pseudoProgress) * 0.1f;
+                Progress.Report(progressId, pseudoProgress, m_pendingOutput = value);
+            }
+        }
+        float pseudoProgress;
+        int progressId;
         bool m_IsCompleted;
         public bool IsCompleted => m_IsCompleted;
         public ShellResult GetResult() => result;
@@ -26,7 +42,34 @@ namespace com.bbbirder.unityeditor
             result = new(command);
             isQuiet = quiet;
             isThrowOnNonZeroExitCode = throwOnNonZeroExitCode;
+            progressId = -1;
+            progressId = Progress.Start(command, command);
 
+            Progress.RegisterPauseCallback(progressId, (isPause) =>
+            {
+                PromptWindow.Show(PendingOutput, input =>
+                {
+                    proc.StandardInput.WriteLine(input);
+                    Shell.queue.Enqueue((this, LogEventType.InfoLog, input + "\n"));
+                });
+                return false;
+            });
+            Progress.RegisterCancelCallback(progressId, () =>
+            {
+                try
+                {
+                    if (!proc.CloseMainWindow())
+                    {
+                        proc.Kill();
+                    }
+                    proc.Dispose();
+                    proc = null;
+                }
+                catch
+                {
+                }
+                return proc is null || proc.HasExited;
+            });
         }
 
         public void OnCompleted(Action continuation)
@@ -40,6 +83,7 @@ namespace com.bbbirder.unityeditor
                 onComplete += _ => continuation?.Invoke();
             }
         }
+
 
         public IEnumerator ToCoroutine()
         {
@@ -101,6 +145,10 @@ namespace com.bbbirder.unityeditor
 
         internal void NotifyComplete(int ExitCode)
         {
+            if (progressId != -1)
+            {
+                Progress.Remove(progressId);
+            }
             result.NotifyComplete(ExitCode);
             if (ExitCode != 0 && isThrowOnNonZeroExitCode)
             {
