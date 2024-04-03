@@ -18,26 +18,27 @@ namespace com.bbbirder.unityeditor
 		ErrorLog,
 		EndStream,
 	}
-
+	public struct ShellSettings
+	{
+		public string workDirectory;
+		public Dictionary<string, string> environment;
+		public bool quiet;
+		public bool throwOnNonZeroExitCode;
+	}
 	public static class Shell
 	{
-		/// <summary>
-		/// Whether to throw when a shell returns non-zero exit code.
-		/// </summary>
-		public static bool ThrowOnNonZeroExitCode = false;
 		public static Dictionary<string, string> DefaultEnvironment = new();
-		private static ConcurrentQueue<(ShellRequest req, LogEventType type, object arg)> _queue = new();
-
+		internal static ConcurrentQueue<(ShellRequest req, LogEventType type, object arg)> queue = new();
+		public static Dictionary<ShellRequest, StringBuilder> lineBuilders = new();
 
 		static Shell()
 		{
-			_queue ??= new();
 			EditorApplication.update += DumpQueue;
 		}
-
 		internal static void DumpQueue()
 		{
-			while (_queue.TryDequeue(out var res))
+
+			while (queue.TryDequeue(out var res))
 			{
 				try
 				{
@@ -152,9 +153,12 @@ namespace com.bbbirder.unityeditor
 		/// <param name="workDirectory"></param>
 		/// <param name="environmentVars"></param>
 		/// <returns></returns>
-		public static ShellRequest RunCommand(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, bool quiet = false)
+		public static ShellRequest RunCommand(string cmd, ShellSettings settings = default)
 		{
-			cmd = "@echo off>nul\n" +
+			var workDirectory = settings.workDirectory ?? ".";
+			var environ = settings.environment ?? new();
+			var quiet = settings.quiet;
+			var finalCmd = "@echo off>nul\n" +
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
 				"@chcp 65001>nul\n"
 #endif

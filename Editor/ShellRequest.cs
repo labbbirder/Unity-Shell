@@ -13,16 +13,14 @@ namespace com.bbbirder.unityeditor
         public event Action<LogEventType, string> onLog;
         public event Action<int> onComplete;
         bool isQuiet;
+        bool isThrowOnNonZeroExitCode;
         // Process process;
         ShellResult result;
-
-        bool _completed;
-        public bool IsCompleted => _completed;
         public ShellResult GetResult() => result;
-        internal ShellRequest(string command, Process proc, bool quiet)
+        internal ShellRequest(string command, Process proc, bool quiet, bool throwOnNonZeroExitCode)
         {
             // process = proc;
-            _completed = false;
+            m_IsCompleted = false;
             result = new(command);
             isQuiet = quiet;
         }
@@ -101,13 +99,13 @@ namespace com.bbbirder.unityeditor
         internal void NotifyComplete(int ExitCode)
         {
             result.NotifyComplete(ExitCode);
-            if (ExitCode != 0 && Shell.ThrowOnNonZeroExitCode)
+            if (ExitCode != 0 && isThrowOnNonZeroExitCode)
             {
                 throw new($"shell exit with code {ExitCode}, {result.Error}");
             }
             onComplete?.Invoke(ExitCode);
             onComplete = null;
-            _completed = true;
+            m_IsCompleted = true;
         }
 
         public ShellRequest GetAwaiter() => this;
