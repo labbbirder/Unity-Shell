@@ -64,11 +64,12 @@ namespace com.bbbirder.unityeditor
                     }
                     proc.Dispose();
                     proc = null;
+                return proc is null || proc.HasExited;
                 }
                 catch
                 {
+                    return true;
                 }
-                return proc is null || proc.HasExited;
             });
         }
 

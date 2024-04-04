@@ -8,6 +8,7 @@ using System;
 using System.Text;
 using System.Threading;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 
 namespace com.bbbirder.unityeditor
 {
@@ -135,7 +136,8 @@ namespace com.bbbirder.unityeditor
 				}
 			}
 		}
-
+		[DllImport("libOS.so", EntryPoint = "os_chmod")]
+		extern static int os_chmod(string path, int mode);
 
 		static Process CreateProcess(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, params string[] args)
 		{
@@ -189,7 +191,10 @@ namespace com.bbbirder.unityeditor
 			var workDirectory = settings.workDirectory ?? ".";
 			var environ = settings.environment ?? new();
 			var quiet = settings.quiet;
-			var finalCmd = "@echo off>nul\n" +
+			var finalCmd =
+#if UNITY_EDITOR_WIN
+				"@echo off>nul\n" +
+#endif
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
 				"@chcp 65001>nul\n"
 #endif
@@ -209,11 +214,12 @@ namespace com.bbbirder.unityeditor
 			File.Move(tempFile, cmdFile);
 			File.WriteAllText(cmdFile, finalCmd);
 #if UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
-			var pChmod = CreateProcess("chmod", ".", "+x", cmdFile);
-			pChmod.WaitForExit();
+			var ret = os_chmod(cmdFile, 511);
+			var p = CreateProcess("bash", workDirectory, environ, cmdFile);
+#else
+			var p = CreateProcess(cmdFile, workDirectory, environ);
 #endif
 
-			var p = CreateProcess(cmdFile, workDirectory, environ);
 			return QueueUpProcess(p, cmd, quiet, settings.throwOnNonZeroExitCode);
 		}
 
