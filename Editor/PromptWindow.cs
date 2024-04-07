@@ -25,7 +25,7 @@ namespace com.bbbirder.unityeditor
             EditorGUILayout.PrefixLabel(prompt);
             EditorGUILayout.BeginHorizontal();
             GUI.SetNextControlName(nameof(prompt));
-            input = EditorGUILayout.DelayedTextField(input);
+            input = EditorGUILayout.TextField(input);
             var e = Event.current;
             if (GUILayout.Button("submit", GUILayout.Width(60)) || (e.isKey && e.keyCode == KeyCode.Return))
             {
