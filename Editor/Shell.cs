@@ -25,6 +25,13 @@ namespace com.bbbirder.unityeditor
 		public Dictionary<string, string> environment;
 		public bool quiet;
 		public bool throwOnNonZeroExitCode;
+		public static ShellSettings Default => new()
+		{
+			workDirectory = ".",
+			environment = null,
+			quiet = false,
+			throwOnNonZeroExitCode = true,
+		};
 	}
 	public static class Shell
 	{
@@ -136,10 +143,8 @@ namespace com.bbbirder.unityeditor
 				}
 			}
 		}
-		[DllImport("libOS.so", EntryPoint = "os_chmod")]
-		extern static int os_chmod(string path, int mode);
 
-		static Process CreateProcess(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, params string[] args)
+		static Process CreateProcess(string cmd, string workDirectory = ".", Dictionary<string, string> environ = null, params object[] args)
 		{
 			ProcessStartInfo start = new ProcessStartInfo(cmd)
 			{
@@ -165,7 +170,7 @@ namespace com.bbbirder.unityeditor
 			start.ArgumentList.Clear();
 			foreach (var arg in args)
 			{
-				start.ArgumentList.Add(arg);
+				start.ArgumentList.Add(arg.ToString());
 			}
 
 			ApplyEnviron(start, DefaultEnvironment);
@@ -224,16 +229,20 @@ namespace com.bbbirder.unityeditor
 		}
 
 
-		public static ShellRequest RunCommand(string executable, ShellSettings settings = default, params string[] args)
+		public static ShellRequest RunCommand(string executable, ShellSettings settings, params object[] args)
 		{
 			var workDirectory = settings.workDirectory ?? ".";
-			var environ = settings.environment ?? new();
+			var environ = settings.environment;
 			var quiet = settings.quiet;
 
 			var p = CreateProcess(executable, workDirectory, environ, args);
 			return QueueUpProcess(p, executable + ' ' + String.Join(' ', args), quiet, settings.throwOnNonZeroExitCode);
 		}
 
+		public static ShellRequest RunCommand(string executable, params object[] args)
+		{
+			return RunCommand(executable, ShellSettings.Default, args);
+		}
 
 		static ShellRequest QueueUpProcess(Process p, string cmd, bool quiet, bool throwOnNonZeroExitCode)
 		{
@@ -286,6 +295,11 @@ namespace com.bbbirder.unityeditor
 			});
 			return req;
 		}
+		
+		#region external stubs
+		[DllImport("libOS.so", EntryPoint = "os_chmod")]
+		extern static int os_chmod(string path, int mode);
+		#endregion
 	}
 
 }
