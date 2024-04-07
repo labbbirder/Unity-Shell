@@ -19,20 +19,40 @@ namespace com.bbbirder.unityeditor
 		ErrorLog,
 		EndStream,
 	}
+
+
 	public struct ShellSettings
 	{
 		public string workDirectory;
 		public Dictionary<string, string> environment;
 		public bool quiet;
 		public bool throwOnNonZeroExitCode;
+		/// <summary>
+		/// Show Unity progress bar while executing.
+		/// </summary>
+		public bool withProgress;
+		/// <summary>
+		/// Whether the Unity progress bar can be canceled.
+		/// </summary>
+		public bool progressCancelable;
+		/// <summary>
+		/// Whether to clear the Unity progress with the shell terminated.
+		/// </summary>
+		public bool autoClearProgress;
+
 		public static ShellSettings Default => new()
 		{
 			workDirectory = ".",
 			environment = null,
 			quiet = false,
+			withProgress = false,
+			progressCancelable = true,
+			autoClearProgress = true,
 			throwOnNonZeroExitCode = true,
 		};
 	}
+
+
 	public static class Shell
 	{
 		public static Dictionary<string, string> DefaultEnvironment = new();
@@ -43,58 +63,15 @@ namespace com.bbbirder.unityeditor
 		{
 			EditorApplication.update += DumpQueue;
 		}
+
 		internal static void DumpQueue()
 		{
-
 			while (queue.TryDequeue(out var res))
 			{
 				try
 				{
 					var (req, type, arg) = res;
-					if (type == LogEventType.EndStream)
-					{
-						if (!lineBuilders.TryGetValue(req, out var builder))
-						{
-							lineBuilders[req] = builder = new();
-						}
-						if (builder.Length > 0)
-						{
-							req.Log(LogEventType.InfoLog, builder.ToString());
-						}
-						builder.Clear();
-						req.NotifyComplete((int)arg);
-					}
-					else
-					{
-						if (type == LogEventType.InfoLog)
-						{
-							if (!lineBuilders.TryGetValue(req, out var builder))
-							{
-								lineBuilders[req] = builder = new();
-							}
-							var buf = (arg as string).AsSpan();
-							var nIdx = ~0;
-							var pendingOutput = "";
-							while ((nIdx = buf.IndexOf('\n')) != ~0)
-							{
-								builder.Append(buf.Slice(0, nIdx));
-								buf = buf.Slice(nIdx + 1);
-								pendingOutput = builder.ToString();
-								req.Log(type, pendingOutput);
-								builder.Clear();
-							}
-							builder.Append(buf);
-							if (builder.Length > 0)
-							{
-								pendingOutput = builder.ToString();
-							}
-							req.PendingOutput = pendingOutput;
-						}
-						else
-						{
-							req.Log(type, (string)arg);
-						}
-					}
+					req.OnReceiveData(type, arg);
 				}
 				catch (Exception e)
 				{
@@ -191,11 +168,12 @@ namespace com.bbbirder.unityeditor
 		/// <param name="workDirectory"></param>
 		/// <param name="environmentVars"></param>
 		/// <returns></returns>
-		public static ShellRequest RunCommand(string cmd, ShellSettings settings = default)
+		public static ShellRequest RunCommand(string cmd, ShellSettings? settings = default)
 		{
-			var workDirectory = settings.workDirectory ?? ".";
-			var environ = settings.environment ?? new();
-			var quiet = settings.quiet;
+			var settings2 = settings ?? ShellSettings.Default;
+			var workDirectory = settings2.workDirectory ?? ".";
+			var environ = settings2.environment ?? new();
+			var quiet = settings2.quiet;
 			var finalCmd =
 #if UNITY_EDITOR_WIN
 				"@echo off>nul\n" +
@@ -225,7 +203,7 @@ namespace com.bbbirder.unityeditor
 			var p = CreateProcess(cmdFile, workDirectory, environ);
 #endif
 
-			return QueueUpProcess(p, cmd, quiet, settings.throwOnNonZeroExitCode);
+			return QueueUpProcess(p, cmd, settings2);
 		}
 
 
@@ -233,21 +211,22 @@ namespace com.bbbirder.unityeditor
 		{
 			var workDirectory = settings.workDirectory ?? ".";
 			var environ = settings.environment;
-			var quiet = settings.quiet;
 
 			var p = CreateProcess(executable, workDirectory, environ, args);
-			return QueueUpProcess(p, executable + ' ' + String.Join(' ', args), quiet, settings.throwOnNonZeroExitCode);
+			return QueueUpProcess(p, executable + ' ' + String.Join(' ', args), settings);
 		}
+
 
 		public static ShellRequest RunCommand(string executable, params object[] args)
 		{
 			return RunCommand(executable, ShellSettings.Default, args);
 		}
 
-		static ShellRequest QueueUpProcess(Process p, string cmd, bool quiet, bool throwOnNonZeroExitCode)
+
+		static ShellRequest QueueUpProcess(Process p, string cmd, ShellSettings settings)
 		{
 
-			ShellRequest req = new ShellRequest(cmd, p, quiet, throwOnNonZeroExitCode);
+			ShellRequest req = new ShellRequest(cmd, settings, p);
 
 			ThreadPool.QueueUserWorkItem(delegate (object state)
 			{
@@ -295,7 +274,8 @@ namespace com.bbbirder.unityeditor
 			});
 			return req;
 		}
-		
+
+
 		#region external stubs
 		[DllImport("libOS.so", EntryPoint = "os_chmod")]
 		extern static int os_chmod(string path, int mode);

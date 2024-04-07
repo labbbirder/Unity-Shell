@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
 
@@ -12,11 +13,12 @@ namespace com.bbbirder.unityeditor
     {
         public event Action<LogEventType, string> onLog;
         public event Action<int> onComplete;
-        bool isQuiet;
-        bool isThrowOnNonZeroExitCode;
-        // Process process;
+        string command;
+        ShellSettings settings;
+        Process process;
         ShellResult result;
         string m_pendingOutput;
+        StringBuilder lineBuilder;
         internal string PendingOutput
         {
             get
@@ -28,6 +30,7 @@ namespace com.bbbirder.unityeditor
                 if (ReferenceEquals(m_pendingOutput, value)) return;
                 pseudoProgress += (1 - pseudoProgress) * 0.1f;
                 Progress.Report(progressId, pseudoProgress, m_pendingOutput = value);
+                UpdateProgressBar(command, value, pseudoProgress);
             }
         }
         float pseudoProgress;
@@ -35,42 +38,78 @@ namespace com.bbbirder.unityeditor
         bool m_IsCompleted;
         public bool IsCompleted => m_IsCompleted;
         public ShellResult GetResult() => result;
-        internal ShellRequest(string command, Process proc, bool quiet, bool throwOnNonZeroExitCode)
+        internal ShellRequest(string command, ShellSettings settings, Process proc)
         {
-            // process = proc;
+            process = proc;
+            this.lineBuilder = new();
+            this.command = command;
+            this.settings = settings;
             m_IsCompleted = false;
             result = new(command);
-            isQuiet = quiet;
-            isThrowOnNonZeroExitCode = throwOnNonZeroExitCode;
+
+            UpdateProgressBar("Shell", command, 0);
             progressId = -1;
             progressId = Progress.Start(command, command);
 
             Progress.RegisterPauseCallback(progressId, (isPause) =>
             {
-                PromptWindow.Show(PendingOutput, input =>
-                {
-                    proc.StandardInput.WriteLine(input);
-                    Shell.queue.Enqueue((this, LogEventType.InfoLog, input + "\n"));
-                });
+                PromptWindow.Show(PendingOutput, Input);
                 return false;
             });
             Progress.RegisterCancelCallback(progressId, () =>
             {
-                try
-                {
-                    if (!proc.CloseMainWindow())
-                    {
-                        proc.Kill();
-                    }
-                    proc.Dispose();
-                    proc = null;
-                return proc is null || proc.HasExited;
-                }
-                catch
-                {
-                    return true;
-                }
+                return TryCancel();
             });
+        }
+
+        void UpdateProgressBar(string title, string message, float progress)
+        {
+            if (!settings.withProgress) return;
+            if (settings.progressCancelable)
+            {
+                if (EditorUtility.DisplayCancelableProgressBar(title, message, progress))
+                {
+                    TryCancel();
+                }
+            }
+            else
+            {
+                EditorUtility.DisplayProgressBar(title, message, progress);
+            }
+        }
+
+        /// <summary>
+        /// Write user input to the process
+        /// </summary>
+        /// <param name="input"></param>
+        public void Input(string input)
+        {
+            process.StandardInput.WriteLine(input);
+            var line = input.EndsWith('\n') ? input : input + '\n';
+            OnReceiveData(LogEventType.InfoLog, line);
+        }
+
+        /// <summary>
+        /// Try to cancel the process
+        /// </summary>
+        /// <returns></returns>
+        public bool TryCancel()
+        {
+            if (process is null) return false;
+            try
+            {
+                if (!process.CloseMainWindow())
+                {
+                    process.Kill();
+                }
+                process.Dispose();
+                process = null;
+                return process is null || process.HasExited;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         public void OnCompleted(Action continuation)
@@ -105,7 +144,8 @@ namespace com.bbbirder.unityeditor
             return result;
         }
 
-        public void Log(LogEventType type, string log)
+
+        void OnLog(LogEventType type, string log)
         {
             result.AppendLine(type, log);
 
@@ -119,7 +159,7 @@ namespace com.bbbirder.unityeditor
 
             onLog?.Invoke(type, log);
 
-            if (!isQuiet)
+            if (!settings.quiet)
             {
 
                 log = ConsoleUtils.ConvertToUnityColor(log);
@@ -144,14 +184,57 @@ namespace com.bbbirder.unityeditor
         }
 
 
-        internal void NotifyComplete(int ExitCode)
+        internal void OnReceiveData(LogEventType type, object raw)
+        {
+            if (type == LogEventType.EndStream)
+            {
+                if (lineBuilder.Length > 0)
+                {
+                    OnLog(LogEventType.InfoLog, lineBuilder.ToString());
+                    lineBuilder.Clear();
+                }
+                NotifyComplete((int)raw);
+            }
+            else if (type == LogEventType.InfoLog)
+            {
+                var buf = (raw as string).AsSpan();
+                var nIdx = ~0;
+                var pendingOutput = "";
+                while ((nIdx = buf.IndexOf('\n')) != ~0)
+                {
+                    lineBuilder.Append(buf.Slice(0, nIdx));
+                    buf = buf.Slice(nIdx + 1);
+                    pendingOutput = lineBuilder.ToString();
+                    OnLog(type, pendingOutput);
+                    lineBuilder.Clear();
+                }
+                lineBuilder.Append(buf);
+                if (lineBuilder.Length > 0)
+                {
+                    pendingOutput = lineBuilder.ToString();
+                }
+                PendingOutput = pendingOutput;
+            }
+            else
+            {
+                OnLog(type, raw as string);
+            }
+        }
+
+
+        void NotifyComplete(int ExitCode)
         {
             if (progressId != -1)
             {
                 Progress.Remove(progressId);
             }
+            if (settings.autoClearProgress && settings.withProgress)
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
             result.NotifyComplete(ExitCode);
-            if (ExitCode != 0 && isThrowOnNonZeroExitCode)
+            if (ExitCode != 0 && settings.throwOnNonZeroExitCode)
             {
                 throw new($"shell exit with code {ExitCode}, {result.Error}");
             }
