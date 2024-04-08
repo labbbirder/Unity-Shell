@@ -82,7 +82,7 @@ Shell.RunCommand(@"
 ");
 
 // separate arguments
-Shell.RunCommand("ping", "baidu.com", "-n", 20);
+Shell.RunCommandLine("ping", "baidu.com", "-n", 20);
 ```
 
 等待结果：

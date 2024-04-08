@@ -162,7 +162,7 @@ namespace com.bbbirder.unityeditor
 
 
 		/// <summary>
-		/// Run a command
+		/// Run multi-line command
 		/// </summary>
 		/// <param name="cmd"></param>
 		/// <param name="workDirectory"></param>
@@ -207,7 +207,7 @@ namespace com.bbbirder.unityeditor
 		}
 
 
-		public static ShellRequest RunCommand(string executable, ShellSettings settings, params object[] args)
+		public static ShellRequest RunCommandLine(string executable, ShellSettings settings, params object[] args)
 		{
 			var workDirectory = settings.workDirectory ?? ".";
 			var environ = settings.environment;
@@ -217,9 +217,9 @@ namespace com.bbbirder.unityeditor
 		}
 
 
-		public static ShellRequest RunCommand(string executable, params object[] args)
+		public static ShellRequest RunCommandLine(string executable, params object[] args)
 		{
-			return RunCommand(executable, ShellSettings.Default, args);
+			return RunCommandLine(executable, ShellSettings.Default, args);
 		}
 
 
