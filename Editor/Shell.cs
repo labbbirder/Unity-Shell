@@ -197,7 +197,7 @@ namespace com.bbbirder.unityeditor
 			File.Move(tempFile, cmdFile);
 			File.WriteAllText(cmdFile, finalCmd);
 #if UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
-			var ret = os_chmod(cmdFile, 511);
+			var ret = chmod(cmdFile, 511);
 			var p = CreateProcess("bash", workDirectory, environ, cmdFile);
 #else
 			var p = CreateProcess(cmdFile, workDirectory, environ);
@@ -277,8 +277,8 @@ namespace com.bbbirder.unityeditor
 
 
 		#region external stubs
-		[DllImport("libOS.so", EntryPoint = "os_chmod")]
-		extern static int os_chmod(string path, int mode);
+		[DllImport("libc")]
+		extern static int chmod(string path, int mode);
 		#endregion
 	}
 
