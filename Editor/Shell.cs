@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Buffers;
+using System.Linq;
 
 namespace com.bbbirder.unityeditor
 {
@@ -55,6 +57,7 @@ namespace com.bbbirder.unityeditor
 
 	public static class Shell
 	{
+		readonly static Encoding DEFAULT_WINDOWS_CONSOLE_ENCODING = Encoding.GetEncoding("gbk");
 		public static Dictionary<string, string> DefaultEnvironment = new();
 		internal static ConcurrentQueue<(ShellRequest req, LogEventType type, object arg)> queue = new();
 		public static Dictionary<ShellRequest, StringBuilder> lineBuilders = new();
@@ -135,14 +138,14 @@ namespace com.bbbirder.unityeditor
 			start.RedirectStandardError =
 			start.RedirectStandardInput = true;
 
-			// 			start.StandardInputEncoding =
-			// 			start.StandardOutputEncoding =
-			// 			start.StandardErrorEncoding =
-			// #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-			// 				Encoding.Unicode;
-			// #else
-			// 				Encoding.UTF8;
-			// #endif
+			start.StandardInputEncoding =
+			start.StandardOutputEncoding =
+			start.StandardErrorEncoding =
+#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
+				Encoding.Unicode;
+#else
+				Encoding.UTF8;
+#endif
 
 			start.ArgumentList.Clear();
 			foreach (var arg in args)
@@ -179,7 +182,7 @@ namespace com.bbbirder.unityeditor
 				"@echo off>nul\n" +
 #endif
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-				"@chcp 65001>nul\n"
+				"@chcp 65001>nul\n" +
 #endif
 				cmd;
 
@@ -222,6 +225,56 @@ namespace com.bbbirder.unityeditor
 			return RunCommandLine(executable, ShellSettings.Default, args);
 		}
 
+		static IEnumerable<string> GetConsoleOutput(StreamReader console)
+		{
+			const int BUFFER_SIZE = 40960;
+			var buffer = ArrayPool<byte>.Shared.Rent(BUFFER_SIZE);
+			while (!console.EndOfStream)
+			{
+				var index = 0;
+				var wchar = console.CurrentEncoding == Encoding.Unicode;
+				while (console.Peek() != -1)
+				{
+					var b = console.Read();
+					if (wchar)
+					{
+						if (index + 2 < buffer.Length)
+						{
+							if (BitConverter.IsLittleEndian)
+							{
+								buffer[index++] = (byte)(b & 0xff);
+								buffer[index++] = (byte)(b >> 8);
+							}
+							else
+							{
+								buffer[index++] = (byte)(b >> 8);
+								buffer[index++] = (byte)(b & 0xff);
+							}
+						}
+					}
+					else
+					{
+						if (index + 1 < buffer.Length)
+						{
+							buffer[index++] = (byte)b;
+						}
+					}
+				}
+
+				var encoding = Encoding.UTF8;
+#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
+				UnityEngine.Debug.Log(string.Join(',', buffer.Select(b => b.ToString("x2")).ToArray(), 0, index));
+				UnityEngine.Debug.Log(ConsoleUtils.IsValidUTF8(buffer, 0, index) + " " + index);
+				if (!ConsoleUtils.IsValidUTF8(buffer, 0, index))
+				{
+					encoding = DEFAULT_WINDOWS_CONSOLE_ENCODING;
+				}
+#endif
+				var output = encoding.GetString(buffer, 0, index);
+				yield return output;
+			}
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
 
 		static ShellRequest QueueUpProcess(Process p, string cmd, ShellSettings settings)
 		{
@@ -232,32 +285,18 @@ namespace com.bbbirder.unityeditor
 			{
 				try
 				{
-					var builder = new StringBuilder();
-
-					while (!p.StandardOutput.EndOfStream)
+					foreach (var output in GetConsoleOutput(p.StandardOutput))
 					{
-						while (p.StandardOutput.Peek() > -1)
-						{
-							builder.Append((char)p.StandardOutput.Read());
-						}
-						var output = builder.ToString();
-						builder.Clear();
 						queue.Enqueue((req, LogEventType.InfoLog, output));
 					}
 
-					while (!p.StandardError.EndOfStream)
+					foreach (var output in GetConsoleOutput(p.StandardError))
 					{
-						string error = p.StandardError.ReadLine();
-
-						if (!string.IsNullOrEmpty(error))
-						{
-							if (!string.IsNullOrEmpty(error))
-								queue.Enqueue((req, LogEventType.ErrorLog, error));
-						}
+						if (!string.IsNullOrEmpty(output))
+							queue.Enqueue((req, LogEventType.ErrorLog, output));
 					}
 
 					queue.Enqueue((req, LogEventType.EndStream, p.ExitCode));
-
 				}
 				catch (Exception e)
 				{

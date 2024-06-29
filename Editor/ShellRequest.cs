@@ -149,14 +149,6 @@ namespace com.bbbirder.unityeditor
         {
             result.AppendLine(type, log);
 
-#if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-            var bytes = Encoding.Unicode.GetBytes(log);
-            if (ConsoleUtils.IsUTF8InsteadOf16(bytes))
-            {
-                log = Encoding.UTF8.GetString(bytes);
-            }
-#endif
-
             onLog?.Invoke(type, log);
 
             if (!settings.quiet)

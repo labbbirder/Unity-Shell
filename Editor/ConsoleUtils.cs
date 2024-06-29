@@ -87,16 +87,16 @@ namespace com.bbbirder.unityeditor
         /// </summary>
         /// <param name="bytes"></param>
         /// <returns></returns>
-        public unsafe static bool IsUTF8InsteadOf16(byte[] bytes)
+        public unsafe static bool IsValidUTF8(byte[] bytes, int index, int count)
         {
-            if (bytes.Length % 2 != 0) return true; // distinguish from utf-16 only
-            if (!bytes.Any(b => b == 0))
-            {
-                _ = 0;
-            }
+            // if (bytes.Length % 2 != 0) return true; // distinguish from utf-16 only
             var c = 0;
-            foreach (var b in bytes)
+            for (int i = index; i < index + count; i++)
             {
+                var b = bytes[i];
+                if (b == 0)
+                    return false;
+
                 if (c != 0)
                 {
                     c--;
