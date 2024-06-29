@@ -263,8 +263,8 @@ namespace com.bbbirder.unityeditor
 
 				var encoding = Encoding.UTF8;
 #if UNITY_EDITOR_WIN && DETECT_STDOUT_ENCODING
-				UnityEngine.Debug.Log(string.Join(',', buffer.Select(b => b.ToString("x2")).ToArray(), 0, index));
-				UnityEngine.Debug.Log(ConsoleUtils.IsValidUTF8(buffer, 0, index) + " " + index);
+				// UnityEngine.Debug.Log(string.Join(',', buffer.Select(b => b.ToString("x2")).ToArray(), 0, index));
+				// UnityEngine.Debug.Log(ConsoleUtils.IsValidUTF8(buffer, 0, index) + " " + index);
 				if (!ConsoleUtils.IsValidUTF8(buffer, 0, index))
 				{
 					encoding = DEFAULT_WINDOWS_CONSOLE_ENCODING;
